@@ -7,57 +7,85 @@ import random
 from math import e
 from math import factorial
 
+from scipy.stats import poisson
 
 class Monitoring:
-    """ Модель компонента/задачи "поиск космических объектов в барьерных зонах".
-        Имитируем поиск объектов только в одном барьере.
-    """
 
     def __init__(self):
-        """
-        """
         with open('config.json') as f:
             config = json.load(f)
-            self.tau = config['Consts for observ']['tau']               # длительность используемых заявок
-            self.delta_t = config['Consts for observ']['delta_t']       # заданное время осмотра барьерной зоны
-            self.n_dir = config['Consts for observ']['n_dir']           # количество направлений (количество заявок, необходимое реализовать за период осмотра)
+            self.tau = config['Consts for observ']['tau']                   # длительность используемых заявок
+            self.delta_t = config['Consts for observ']['delta_t']           # заданное время осмотра барьерной зоны
+            self.n_dir = config['Consts for observ']['n_dir']               # количество направлений (количество заявок, необходимое реализовать за период осмотра)
+            self.k_loss = config['Consts for detection']['k_loss']          # крат ложный обнаруженй
+            self.mean_potok = config['Consts for detection']['mean_potok']  # средний поток наблюдаемых КО
 
     def get_resourse(self, dT):
         """ Возвращает количество требуемого ресурса
         """
         return (self.tau * self.n_dir / self.delta_t )
 
+    def let_resourse(self, resourse, dT, potok):
+        """ Сообщить компоненту сколько ему выделили ресурса.
+        В зависимости от количество ресурса разыгрывает количество обнаружений за такт работы модели
+        """
+        # сколько спутников должны обнаружить за такт работы модели
+        potok_in_dT = 300 * self.k_loss * resourse / self.get_resourse(dT)  *  dT/(60*60)  *  potok / self.mean_potok
+
+        P_1 = poisson.pmf(k=1, mu=potok_in_dT)
+        P_2 = poisson.pmf(k=2, mu=potok_in_dT)
+        P_3 = poisson.pmf(k=3, mu=potok_in_dT)
+        rand = random.random()
+        if  (P_3 > rand):
+            return 3
+        elif (P_3+P_2 > rand):
+            return 2
+        elif (P_3+P_2+P_1 > rand):
+            return 1
+        else:
+            return 0
+
 
 class Detection:
-    """ Модель обнаружеия. Вероятность обнаружения зависит от текущего потока ИСЗ
+    """ Обнаружение. Вероятность обнаружения зависит от текущего потока ИСЗ
         через сектор и от кол-ва ресурса, потраченного на поиск.
     """
 
     def __init__(self):
-        """
-        """
+        self.counts_obj = 0
+        self.resourse = 0
+
         with open('config.json') as f:
             config = json.load(f)
-            self.potok = config['Consts for detection']['potok']
+            self.tau = config['Consts for detection']['tau']
+            self.k_loss = config['Consts for detection']['k_loss']
 
-    def set_potok(self, potok):
-        """ Установить текущий поток
+    def set_count_detection(self, count):
+        """ установить сколько подтверждений необходимо (из поиска)
         """
-        self.potok = potok
+        self.counts_obj = count
 
-    def check_detection(self, resourseMonitoring):
-        """ Розыгрыш вероятности обнаружения за . ИСЗ в секунду. По значению потока КО в час.
+    def get_resourse(self, dT):
         """
-        # поток -- [объектов в час]
-        #
+        Требуемое количетво ресурса на подтверждение
+        """
+        self.resourse = self.counts_obj * self.tau / dT
+        return self.resourse
 
-        k = 1
-        P = 75 * resourseMonitoring * ((self.potok/60/60)**k) / factorial(k) * e**(-self.potok/60/60)
+    def let_resourse(self, resourse, dT):
+        """ Сообщить компоненту сколько ему выделили ресурса.
+        В зависимости от количество ресурса разыграть
+        количество обнаруженных объектов.
+        """
+        #TODO а как отследить сколько ресурса компоненту недодали? И объектов недоподтвердили?
+        if resourse > self.resourse:
+            resourse = self.resourse
 
-        if  (P > random.random()):
-            return True
-        else:
-            return False
+        count_obj = 0
+        for i in range(int(resourse // self.tau / dT)):
+            if random.uniform(0.0, self.k_loss) < 1:
+                count_obj += 1
+        return count_obj
 
 
 class Tracker:
@@ -76,24 +104,27 @@ class Tracker:
 
         self.trackingObjects = []
 
-
     def get_resourse(self, dT):
         """ Возвращает требуемый ресурс.
         """
-        sum_resourse = 0
+        self.sum_resourse = 0
         for obj in self.trackingObjects:
-            sum_resourse += obj.resourse(dT)
-        return sum_resourse
+            self.sum_resourse += obj.resourse(dT)
+        return self.sum_resourse
 
-
-    def let_resourse(self):
+    def let_resourse(self, resourse):
         """ Сообщить компоненту сколько ему выделили ресурса.
         Если выделенного ресурса недостаточно, сбросить объекты.
         При сбросе объекта, по условию (длительность сопровождения)
         принимаем цель как отработанную, либо считаем как пропуск.
         """
-        pass
 
+        delta = abs(self.sum_resourse - resourse)
+
+        if delta > self.sum_resourse * 0.1:
+            self.trackingObjects.pop(random.randint(0, len(self.trackingObjects)))
+            return 1
+        return 0
 
     def add_object(self, time):
         """ Добавить новый объект
@@ -106,16 +137,14 @@ class Tracker:
                                 self.delta_t)
         self.trackingObjects.append(trObject)
 
-
     def remove_object(self, time):
-        """ Проверка не пора ли удалить объект
+        """ Проверка не пора ли удалить объект по условию времени сопровождения
         """
         for index, obj in enumerate(self.trackingObjects):
             if obj.is_expired(time):
                 self.trackingObjects.pop(index)
-                return
-
-
+                return 1
+        return 0
 
     def get_sum_sat(self):
         """ Возвращает количество объектов на сопровождении в данный момент
@@ -152,7 +181,7 @@ class TrackingObject:
         return  (self.startTime + self.p_sopr < currentTime)
 
 
-class VOKO:
+class Voko:
     """ Модель работы компонента работы по ВОКО. Для ВОКО определены:
         startTime -- начало работы по ВОКО
         stopTime -- конец работы по ВОКО
@@ -171,6 +200,8 @@ class VOKO:
 
     def get_resourse(self, dT, currentTime):
         """ Возвращает долю требуемого ресурса.
+        Либо работа по ВОКО идёт, либо не идёт.
+        Всего за весь прогон 1 сеанс работы по ВОКО
         """
         if (self.startTime < currentTime and currentTime < self.stopTime):
             return  (self.tau / self.delta_t)

@@ -1,9 +1,12 @@
 {
     "Priorities":
     {
-        "Search": 4,
-        "Detection": 5,
-        "Track": 6
+        "Search": 3,
+        "Detection": 2,
+        "Track": 4,
+        "VOKO": 1,
+        "PK": 1,
+        "FK": 1
     },
     "Consts for observ":
     {
@@ -13,20 +16,22 @@
     },
     "Consts for detection":
     {
-    	"potok": 200
+        "mean_potok": 10,
+        "tau": 0.026,
+    	"k_loss": 3
     },
     "Consts for Tracker":
     {
         "p_sopr": 80,
-        "delta t": 2,
+        "delta t": 2.5,
         "tau1": 5e-3,
         "tau2": 78e-3
     },
     "Consts for VOKO":
     {
-        "startTime": 1500,
-        "stopTime": 2000,
-        "delta_t": 1.0,
+        "startTime": 150,
+        "stopTime": 200,
+        "delta_t": 2.0,
         "tau": 316e-3
     }
 }

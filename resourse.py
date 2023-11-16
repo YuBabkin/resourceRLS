@@ -8,81 +8,86 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 from components import *
+from potok_sattelite import *
 
 deltaTime = 1                   # такт работы модели (секунды)
 
 monitoring = Monitoring()
 detection = Detection()
 tracker = Tracker()
-voko = VOKO()
+voko = Voko()
 
-resourseObservOut = []
-resourseTrackerOut = []
-resourseVokoOut = []
-resoursePkOut = []
+time_log = []
+res_observ_log = []
+res_detect_log = []
+res_tracker_log = []
+res_voko_log = []
+res_pk_log = []
+res_fk_log = []
+sumObjTracker_log = []               # количество объектов на сопровождении
+sumObjDetect_log = []               # количество обнаруженных объектов (кол-во в такт)
+sumObjFault_log = []                # количество потерянных объектов
 
-timeOut = []                    #
-sumObjTraker = []               # количество объектов на сопровождении
-sumObjDetect = []               # количество обнаруженных объектов (кол-во в такт)
-
-dataSat = pd.read_csv("satellite_mask.csv", sep = ',')
+potokSAT = PotokSatellite("satellite_mask.csv")
 
 for time in range(0, 3600, deltaTime):
 
     #########  получение от компонентов требуемое количество ресурса
-    rOobserv = monitoring.get_resourse(deltaTime)
-    rTracker = tracker.get_resourse(deltaTime)
-    rVoko = voko.get_resourse(deltaTime, time)
-    rPk = 0.03                                                   # помеховый канал
-    rFault = 0.05                                                # для красоты задаём потери ресурса
+    res_observ     = monitoring.get_resourse(deltaTime)
+    res_detect     =  detection.get_resourse(deltaTime)
+    res_tracker    =    tracker.get_resourse(deltaTime)
+    res_voko       =       voko.get_resourse(deltaTime, time)
+    res_pk = 0.03                                                   # помеховый канал
+    res_fk = 0.03                                                   # функциональный контроль
+    res_fault = 0.05                                                # для красоты задаём потери ресурса
 
     # # # # # # # # # # #      Р А Б О Т А    П Л А Н И Р О В Щ И К А       # # # # # # # # # # # # # #
     # главное условие: R_observ + R_traker + R_voko = 100%
-
 
     # if  (resourseTracker > deltaTime - resourseVoko - resoursePk * deltaTime - resourseFault * deltaTime):
     #     rTrackerOut = deltaTime - resourseVoko - resoursePk * deltaTime - resourseFault * deltaTime
     # else:
     #     rTrackerOut = resourseTracker
 
-    rObservOut = deltaTime - rTracker - rVoko - rPk * deltaTime - rFault * deltaTime
-    if  (rObservOut < 0):
-        rObservOut = 0
-    rTrackerOut = rTracker
-    rVokoOut = rVoko
-    rPkOut = rPk
-    rFoult = rFault
+    res_observ_out = deltaTime - res_tracker - res_voko - res_pk * deltaTime - res_fault * deltaTime
+    if  (res_observ_out < 0):
+        res_observ_out = 0
+    res_detect_out = res_detect
+    res_tracker_out = res_tracker
+    res_voko_out = res_voko
+    res_pk_out = res_pk
+    res_fk_out = res_fk
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    #########  логирование + случайности для красоты выдаваемых графиков
-    resourseObservOut.append(rObservOut)
-    resourseTrackerOut.append(rTrackerOut)
-    resourseVokoOut.append(rVokoOut)
-    resoursePkOut.append(rPk + random.uniform(-0.005, 0.005))
-    timeOut.append(time/60)
-    sumObjTraker.append(tracker.get_sum_sat())
-
-    # розыгрыш обнаружения объекта исходя из того, как много потратилось ресурса на поиск
-    detection.set_potok(dataSat['inSector'].iloc[time])
-    detection.set_potok(dataSat['flowSat'].iloc[time])
-    if detection.check_detection(rObservOut):
-        tracker.add_object(time)
-        sumObjDetect.append(1)
-    else:
-        sumObjDetect.append(0)
-
+    tracker.let_resourse(res_tracker_out)
     tracker.remove_object(time)
 
-    # вернуть компонентам доступный/разрешенный ресурс
-    #R_traker.let_resousce(R_observ)
+    n_obj = detection.let_resourse(res_detect_out, deltaTime)
+    for i in range(n_obj):
+        tracker.add_object(time)
+
+    n_obn = monitoring.let_resourse(res_observ_out, deltaTime, potokSAT.inSector(time))
+    detection.set_count_detection(n_obn)
+
+    #########  логирование + случайности для красоты выдаваемых графиков
+    res_observ_log.append(res_observ_out)
+    res_detect_log.append(res_detect_out)
+    res_tracker_log.append(res_tracker_out)
+    res_voko_log.append(res_voko_out)
+    res_pk_log.append(res_pk + random.uniform(-0.005, 0.005))
+    time_log.append(time/60)
+    sumObjTracker_log.append(tracker.get_sum_sat())
 
 
-with open("result_resourse.csv", mode="w", encoding='utf-8') as w_file:
-    w_file_writer = csv.writer(w_file, delimiter = ",", lineterminator="\n")
-    w_file_writer.writerow(["resourse_observ", "resourse_traker", "resourse_voko", "resourse_pk"])
-    for j in range(len(resourseObservOut)):
-        w_file_writer.writerow([resourseObservOut[j], resourseTrackerOut[j], resourseVokoOut[j], resoursePkOut[j]])
+df = pd.DataFrame({'time':  time_log,
+                   'resourseObserv': res_observ_log,
+                   'resourseDetect': res_detect_log,
+                   'resourseTracker': res_tracker_log,
+                   'resourseVoko': res_voko_log,
+                   'sumObjTracker':  sumObjTracker_log})
+df.to_csv('result.csv', sep = ';')
+
 
 
 fig, ax = plt.subplots()
@@ -91,29 +96,28 @@ my_colors.append('green')
 my_colors.append('blue')
 my_colors.append('red')
 my_colors.append('gray')
-ax.stackplot(timeOut,
-             [resoursePkOut] + [resourseTrackerOut] + [resourseVokoOut] + [resourseObservOut],
+ax.stackplot(time_log,
+             [res_pk_log] + [res_tracker_log] + [res_voko_log] + [res_observ_log],
              colors=my_colors, alpha=0.7)
 plt.xlabel(r'Время')
-#plt.ylabel(r'Распределение ресурса между решаемыми задачами РЛС')
 plt.title('Распределение ресурса между решаемыми задачами РЛС')
 plt.grid(True)
 plt.show()
 
+
+
+'''
 dataSat['skip'] = 0
-dataSat['skip'] = dataSat['flowSat'] - sumObjTraker
+dataSat['skip'] = dataSat['flowSat'] - sumObjTracker
 
 f = open('config.json')
 config = json.load(f)
 
 
-
-
-
 fig, ax = plt.subplots()
-ax.plot(timeOut, dataSat['inSector'], color = 'black')
-plt.stackplot(timeOut, dataSat['flowSat'], color = 'red')
-plt.stackplot(timeOut, sumObjTraker, color = 'blue', alpha = 1.0)
+ax.plot(time_out, dataSat['inSector'], color = 'black')
+plt.stackplot(time_out, dataSat['flowSat'], color = 'red')
+plt.stackplot(time_out, sumObjTracker, color = 'blue', alpha = 1.0)
 plt.stackplot([config['Consts for VOKO']['startTime']/60, config['Consts for VOKO']['stopTime']/60], [100, 100], color = 'red', alpha = 0.3)
 plt.xlabel(r'Время')
 plt.ylabel(r'Количество ИСЗ')
@@ -127,3 +131,4 @@ ax.legend(['количество объектов в секторе действ
            'обнаруженных'], loc = 2)
 plt.show()
 
+'''
