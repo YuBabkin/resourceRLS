@@ -9,10 +9,11 @@ from math import factorial
 
 from scipy.stats import poisson
 
+
 class Monitoring:
 
-    def __init__(self):
-        with open('config.json') as f:
+    def __init__(self, config_file):
+        with open(config_file) as f:
             config = json.load(f)
             self.tau = config['Consts for observ']['tau']                   # длительность используемых заявок
             self.delta_t = config['Consts for observ']['delta_t']           # заданное время осмотра барьерной зоны
@@ -51,11 +52,11 @@ class Detection:
         через сектор и от кол-ва ресурса, потраченного на поиск.
     """
 
-    def __init__(self):
+    def __init__(self, config_file):
         self.counts_obj = 0
         self.resourse = 0
 
-        with open('config.json') as f:
+        with open(config_file) as f:
             config = json.load(f)
             self.tau = config['Consts for detection']['tau']
             self.k_loss = config['Consts for detection']['k_loss']
@@ -91,8 +92,8 @@ class Detection:
 class Tracker:
     """ Модель компонента "сопровождение".
     """
-    def __init__(self):
-        with open('config.json') as f:
+    def __init__(self, config_file):
+        with open(config_file) as f:
             self.config = json.load(f)
 
         self.delta_t = self.config['Consts for Tracker']['delta t']
@@ -189,8 +190,8 @@ class Voko:
         tau -- длительность заявки
     """
 
-    def __init__(self):
-        with open('config.json') as f:
+    def __init__(self, config_file):
+        with open(config_file) as f:
             config = json.load(f)
             self.startTime = config['Consts for VOKO']['startTime']
             self.stopTime = config['Consts for VOKO']['stopTime']

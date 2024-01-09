@@ -16,7 +16,7 @@
     },
     "Consts for detection":
     {
-        "mean_potok": 10,
+        "mean_potok": 100,
         "tau": 0.026,
     	"k_loss": 3
     },
@@ -29,9 +29,9 @@
     },
     "Consts for VOKO":
     {
-        "startTime": 150,
-        "stopTime": 200,
-        "delta_t": 2.0,
+        "startTime": 500,
+        "stopTime": 1000,
+        "delta_t": 1.0,
         "tau": 316e-3
     }
 }
