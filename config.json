@@ -1,4 +1,7 @@
 {
+    "time_step" : 1,
+    "time_start" : 0,
+    "time_finish": 600,
     "Priorities":
     {
         "Search": 3,
@@ -16,7 +19,7 @@
     },
     "Consts for detection":
     {
-        "mean_potok": 100,
+        "mean_potok": 150,
         "tau": 0.026,
     	"k_loss": 3
     },
@@ -29,9 +32,9 @@
     },
     "Consts for VOKO":
     {
-        "startTime": 500,
-        "stopTime": 1000,
-        "delta_t": 1.0,
+        "startTime": [100, 200],
+        "stopTime": [150, 250],
+        "delta_t": 0.5,
         "tau": 316e-3
     }
 }

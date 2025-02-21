@@ -10,12 +10,15 @@ import matplotlib.pyplot as plt
 from components import *
 from potok_satellite import *
 
-deltaTime = 1                   # такт работы модели (секунды)
-
-config_file = 'config.json'
 
 potokSAT = PotokSatellite("satellite.csv")
 
+config_file = 'config.json'
+with open(config_file, 'r') as f:
+    config = json.load(f)
+    time_start = config['time_start']
+    time_finish = config['time_finish']
+    time_step = config['time_step']                  # такт работы модели (секунды)
 
 monitoring = Monitoring(config_file)
 detection = Detection(config_file)
@@ -34,36 +37,60 @@ sumObjDetect_log = []               # количество взятых на с�
 sumObjFault_log = []                # количество потерянных объектов
 sumObjInBarrier_log = []            # количество объектов в барьере
 
-for time in range(0, 3600, deltaTime):
+for time in range(time_start, time_finish, time_step):
 
     #########  получение от компонентов требуемого количества ресурса
-    res_observ     = monitoring.get_resourse(deltaTime)             # обзор
-    res_detect     =  detection.get_resourse(deltaTime)             # обнаружение
-    res_tracker    =    tracker.get_resourse(deltaTime)             # сопровождение
-    res_voko       =       voko.get_resourse(deltaTime, time)       # ВОКО
-    res_pk = 0.03                                                   # помеховый канал
-    res_fk = 0.03                                                   # функциональный контроль
-    res_fault = 0.05                                                # для красоты задаём потери ресурса
+    res_observ     = monitoring.get_resourse(time_step)             # обзор
+    res_detect     =  detection.get_resourse(time_step)             # обнаружение
+    res_tracker    =    tracker.get_resourse(time_step)             # сопровождение
+    res_voko       =       voko.get_resourse(time_step, time)       # ВОКО
+    res_pk         = 0.03 * time_step                               # помеховый канал
+    res_fk         = 0.03 * time_step                               # функциональный контроль
+    res_fault      = 0.05 * time_step                               # для красоты задаём потери ресурса
 
     # # # # # # # # # # #      Р А Б О Т А    П Л А Н И Р О В Щ И К А       # # # # # # # # # # # # # #
     # главное условие: R_observ + R_traker + R_voko = 100%
 
-    # временной ресурс на поиск рассчитывается как остаток ресурса после выполнения остальных задач
-    res_observ_out = deltaTime \
-                    - res_tracker \
-                    - res_voko \
-                    - res_pk * deltaTime \
-                    - res_fk * deltaTime \
-                    - res_fault * deltaTime
-    if  (res_observ_out < 0):
-        res_observ_out = 0
+    # # #   ПЛАНИРОВЩИК. Оставшийся ресурс на сопровождение.
+    res_in = [res_fault, res_fk, res_pk, res_voko, res_tracker, res_detect, res_observ]
+    res_out = [0] * len(res_in)
 
-    # TODO на обнаружение и сопровождения ресурса тоже может не хватить. Доработать.
-    res_detect_out = res_detect
-    res_tracker_out = res_tracker
-    res_voko_out = res_voko
-    res_pk_out = res_pk
-    res_fk_out = res_fk
+    sum_res = 0
+    for i in range(len(res_in)-1):  # для всех кроме поиска, на поиск всё оставшиеся
+        if (sum_res + res_in[i]) >= 1:
+            res_out[i] =  1 - sum_res
+            sum_res = 1
+        else:
+            res_out[i] = res_in[i]
+            sum_res += res_in[i]
+
+    res_observ_out = 1 - sum_res
+
+    # res_observ_out = res_out[6]
+    res_detect_out = res_out[5]
+    res_tracker_out = res_out[4]
+    res_voko_out = res_out[3]
+    res_pk_out = res_out[2]
+    res_fk_out = res_out[1]
+
+
+    # # # # # планировщик, первый, тупейший вариант
+    # # временной ресурс на поиск рассчитывается как остаток ресурса после выполнения остальных задач
+    # res_observ_out = time_step \
+    #                 - res_tracker \
+    #                 - res_voko \
+    #                 - res_pk * time_step \
+    #                 - res_fk * time_step \
+    #                 - res_fault * time_step
+    # if  (res_observ_out < 0):
+    #     res_observ_out = 0
+
+    # # TODO на обнаружение и сопровождения ресурса тоже может не хватить. Доработать.
+    # res_detect_out = res_detect
+    # res_tracker_out = res_tracker
+    # res_voko_out = res_voko
+    # res_pk_out = res_pk
+    # res_fk_out = res_fk
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -73,13 +100,13 @@ for time in range(0, 3600, deltaTime):
     tracker.remove_object(time)
 
     # сколько ресурса было веделено на подтверждение
-    n_obj = detection.let_resourse(res_detect_out, deltaTime)
+    n_obj = detection.let_resourse(res_detect_out, time_step)
     # добавление объектов на сопровождение
     for i in range(n_obj):
         tracker.add_object(time)
 
     # количество обнаруженных при поиске
-    n_obn = monitoring.let_resourse(res_observ_out, deltaTime, potokSAT.inBarrier(time))
+    n_obn = monitoring.let_resourse(res_observ_out, time_step, potokSAT.inBarrier(time))
     # сколько объектов требуется подтверлить (на след.такте работы модели)
     detection.set_count_detection(n_obn)
 
@@ -147,7 +174,7 @@ plt.stackplot(time_log, sumObjTracker_log, color = 'blue')
 plt.xlabel(r'Время')
 plt.ylabel(r'Количество ИСЗ')
 plt.title('Оценка количества ИСЗ в секторе, оценка количества обнаруженных и пропущенных объектов')
-ax.legend(loc = 1)
+# ax.legend(loc = 1)
 plt.grid(True)
 ax.legend(['количество объектов в секторе действия РЛС',
            'пропущенные объекты',

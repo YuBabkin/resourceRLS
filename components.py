@@ -47,7 +47,8 @@ class Monitoring:
                 --изменении кол-ва выделенного ресурса;
             наигранный поток обнаруженных КО пропорционально изменяется.
         """
-        potok_in_dT = self.k_loss * resourse / self.get_resourse(dT)  *  potok / self.mean_potok  *  dT/(60*60)
+        # количество ИСЗ, которое лрлжно быть обнаружено, если обзор идёт как запланировано, без перекосов
+        potok_in_dT = self.k_loss * resourse / self.get_resourse(dT)  *  potok / self.mean_potok
 
         P_1 = poisson.pmf(k=1, mu=potok_in_dT)
         P_2 = poisson.pmf(k=2, mu=potok_in_dT)
@@ -105,6 +106,7 @@ class Detection:
 
         count_obj = 0
         for i in range(int(resourse // self.tau / dT)):
+            #TODO сформулировать это условие
             if random.uniform(0.0, self.k_loss) < 1:
                 count_obj += 1
         return count_obj
@@ -151,7 +153,7 @@ class Tracker:
         delta = abs(self.sum_resourse - resourse)
 
         if delta > self.sum_resourse * 0.1:
-            self.trackingObjects.pop(random.randint(0, len(self.trackingObjects)))
+            self.trackingObjects.pop(random.randint(0, len(self.trackingObjects)-1))
             return 1
         return 0
 
@@ -232,7 +234,8 @@ class Voko:
         Либо работа по ВОКО идёт, либо не идёт.
         Всего за весь прогон 1 сеанс работы по ВОКО
         """
-        if (self.startTime < currentTime and currentTime < self.stopTime):
-            return  (self.tau / self.delta_t)
-        else:
-            return 0
+        for i in range(len(self.startTime)):
+
+            if (self.startTime[i] < currentTime and currentTime < self.stopTime[i]):
+                return  (self.tau / self.delta_t)
+        return 0
