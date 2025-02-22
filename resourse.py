@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 
 from components import *
 from potok_satellite import *
-
+from scheduler import scheduler_simple
+from scheduler import scheduler_second
 
 potokSAT = PotokSatellite("satellite.csv")
 
@@ -19,6 +20,7 @@ with open(config_file, 'r') as f:
     time_start = config['time_start']
     time_finish = config['time_finish']
     time_step = config['time_step']                  # такт работы модели (секунды)
+    win_length = config['win_length']                # величина скользящего окна для графика захваченных и пропущенных целей В СЕКУНДАХ
 
 monitoring = Monitoring(config_file)
 detection = Detection(config_file)
@@ -51,46 +53,9 @@ for time in range(time_start, time_finish, time_step):
     # # # # # # # # # # #      Р А Б О Т А    П Л А Н И Р О В Щ И К А       # # # # # # # # # # # # # #
     # главное условие: R_observ + R_traker + R_voko = 100%
 
-    # # #   ПЛАНИРОВЩИК. Оставшийся ресурс на сопровождение.
-    res_in = [res_fault, res_fk, res_pk, res_voko, res_tracker, res_detect, res_observ]
-    res_out = [0] * len(res_in)
+    # res_observ_out, res_detect_out, res_tracker_out, res_voko_out, res_pk_out, res_fk_out = scheduler_simple(time_step, res_observ, res_detect, res_tracker, res_voko, res_pk, res_fk, res_fault)
 
-    sum_res = 0
-    for i in range(len(res_in)-1):  # для всех кроме поиска, на поиск всё оставшиеся
-        if (sum_res + res_in[i]) >= 1:
-            res_out[i] =  1 - sum_res
-            sum_res = 1
-        else:
-            res_out[i] = res_in[i]
-            sum_res += res_in[i]
-
-    res_observ_out = 1 - sum_res
-
-    # res_observ_out = res_out[6]
-    res_detect_out = res_out[5]
-    res_tracker_out = res_out[4]
-    res_voko_out = res_out[3]
-    res_pk_out = res_out[2]
-    res_fk_out = res_out[1]
-
-
-    # # # # # планировщик, первый, тупейший вариант
-    # # временной ресурс на поиск рассчитывается как остаток ресурса после выполнения остальных задач
-    # res_observ_out = time_step \
-    #                 - res_tracker \
-    #                 - res_voko \
-    #                 - res_pk * time_step \
-    #                 - res_fk * time_step \
-    #                 - res_fault * time_step
-    # if  (res_observ_out < 0):
-    #     res_observ_out = 0
-
-    # # TODO на обнаружение и сопровождения ресурса тоже может не хватить. Доработать.
-    # res_detect_out = res_detect
-    # res_tracker_out = res_tracker
-    # res_voko_out = res_voko
-    # res_pk_out = res_pk
-    # res_fk_out = res_fk
+    res_observ_out, res_detect_out, res_tracker_out, res_voko_out, res_pk_out, res_fk_out = scheduler_second(time_step, res_observ, res_detect, res_tracker, res_voko, res_pk, res_fk, res_fault)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -180,3 +145,35 @@ ax.legend(['количество объектов в секторе действ
            'пропущенные объекты',
            'обнаруженных'], loc = 2)
 plt.show()
+
+
+# # # График по скользящему окну для кол-ва захваченных, вошедших в сектор и потерянных объектов
+
+time_win = []
+sumObjTracker_win   = []
+sumObjDetect_win    = []
+sumObjFault_win     = []
+sumObjInBarrier_win = []
+for i in range(int(time_finish / win_length / time_step)):
+
+    ii_start = int(i * win_length / time_step)
+    ii_stop = int((i+1) * win_length / time_step)
+
+    time_win.append(i * win_length)
+    sumObjTracker_win.append(sum(sumObjTracker_log[ii_start: ii_stop]))
+    sumObjDetect_win.append(sum(sumObjDetect_log[ii_start: ii_stop]))
+    sumObjFault_win.append(sum(sumObjFault_log[ii_start: ii_stop]))
+    sumObjInBarrier_win.append(sum(sumObjInBarrier_log[ii_start: ii_stop]))
+
+fig, ax = plt.subplots()
+plt.step(time_win, sumObjInBarrier_win, color = 'blue', linewidth = 5, alpha = 0.5)
+plt.step(time_win, sumObjTracker_win, color = 'green', linewidth = 5, alpha = 0.5)
+plt.step(time_win, sumObjDetect_win, color = 'black', linewidth = 5, alpha = 0.5)
+plt.step(time_win, sumObjFault_win, color = 'red', linewidth = 5, alpha = 0.5)
+plt.xlabel(r'Время')
+plt.ylabel(r'Количество объектов')
+plt.title(r'Количество объектов')
+plt.grid(True)
+ax.legend()
+plt.show()
+
